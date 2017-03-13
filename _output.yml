@@ -1,6 +1,6 @@
 beamer_presentation:
-  theme: "Pittsburgh"
-  colortheme: "default"
+  theme: "CambridgeUS"
+  colortheme: "beaver"
   toc: true
   slide_level: 2
   fig_width: 7
