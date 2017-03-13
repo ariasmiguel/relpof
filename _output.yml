@@ -1,0 +1,9 @@
+beamer_presentation:
+  theme: "Pittsburgh"
+  colortheme: "default"
+  toc: true
+  slide_level: 2
+  fig_width: 7
+  fig_height: 5
+  fig_caption: false
+  highlight: tango

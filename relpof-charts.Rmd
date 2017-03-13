@@ -1,0 +1,636 @@
+---
+title: "Performance Update"
+author: "Matt Barry"
+date: '`r strftime(Sys.time(), format = "%B %d, %Y")`'
+output: beamer_presentation
+params:
+  quandl_api:
+    value: NA
+---
+
+```{r,echo=FALSE,cache=FALSE,warning=FALSE,message=FALSE}
+ignore <- lapply(
+  c("knitr",
+    "ggplot2",
+    "quantmod",
+    "PerformanceAnalytics",
+    "Quandl",
+    "directlabels",
+    "scales"),
+    require,
+  quietly=TRUE,warn.conflicts=FALSE,character.only=TRUE)
+
+options("getSymbols.warning4.0"=FALSE,
+        replace.assign=TRUE,
+        width=80)
+start_date <- "2012-01-01"
+current_date <- Sys.Date()
+exchange_file <- paste0(paste("exchange",current_date,sep='-'),".RData")
+start_time <- date()
+stroke_size = 0.75
+
+knitr::opts_chunk$set(
+  echo = FALSE,
+  tidy = FALSE,
+  cache = TRUE,
+  warning = FALSE,
+  out.width='0.85\\linewidth',
+  size='scriptsize',
+  fig.path='figure/relpof-',
+  fig.keep='last',
+  fig.align='center',
+  results='hide',
+  message = FALSE)
+
+`%nin%` <- Negate(`%in%`)
+
+quandl_api <- params$quandl_api
+if (is.na(quandl_api) || ("NA" == quandl_api)) {
+   quandl_api <- Sys.getenv("QUANDL_APIKEY")
+}
+Quandl.api_key(quandl_api) # authenticate
+
+```
+
+```{r tickers}
+macro_tickers <- c("SPY","EEM","ELD","GLD","GSG","UUP","VNQ","TLT","AGG")
+bull_tickers <- c("AGG","DVY","FLTB","GLD","GSG","SHV")
+bear_tickers <- c("SPY","GSG","GLD","FXF","FUTY","FLTB","TLT")
+basket_tickers <- c("VTI","VGK","EWJ","EEM","IEF","ICF","RWX","DBC","GLD","TLT")
+
+all_symbols <- sort(unique(c(
+                             macro_tickers,
+			     bull_tickers,
+                             bear_tickers,
+                             basket_tickers
+                             )))
+exchange_data <- new.env()
+missing_tickers <- c()
+if ( file.exists( exchange_file )) {
+  load( exchange_file ) # loads exchange data environment
+  missing_tickers <- get("missing_tickers",envir=exchange_data)
+} else {
+  for ( s in seq_along(all_symbols)) {
+    symbol <- all_symbols[s]
+    message(paste("Fetching",symbol))
+    tryCatch(
+      getSymbols(symbol,
+                 from=start_date,
+                 adjust=TRUE,
+                 warnings = FALSE,
+                 env = exchange_data),
+      error = function(e) {
+        missing_tickers <<- c(missing_tickers,symbol)
+      }
+    )
+  }
+}
+  
+assign("missing_tickers",missing_tickers,envir=exchange_data)
+save(exchange_data,file=exchange_file)
+
+```
+
+```{r prices}
+available_symbols <- subset(all_symbols,all_symbols %nin% missing_tickers)
+
+closing_prices <- do.call(cbind,
+                          lapply(available_symbols,
+                                 function(x) {
+                                   Cl(get(x,envir=exchange_data))
+                                 }))
+closing_prices <- na.locf(closing_prices)
+colnames(closing_prices) <- available_symbols
+last_data_date <- xts::last(index(closing_prices))
+```
+
+```{r returns}
+daily_returns <- closing_prices / stats::lag(closing_prices) - 1
+daily_returns <- daily_returns[-1]
+daily_returns[is.na(daily_returns)] <- 0
+daily_returns_30 <- xts::last(daily_returns,"30 days")
+daily_returns_60 <- xts::last(daily_returns,"60 days")
+relative_tlt_30 <- Return.relative(daily_returns_30,daily_returns_30[,"TLT"])
+relative_tlt_60 <- Return.relative(daily_returns_60,daily_returns_60[,"TLT"])
+relative_spy_30 <- Return.relative(daily_returns_30,daily_returns_30[,"SPY"])
+relative_spy_60 <- Return.relative(daily_returns_60,daily_returns_60[,"SPY"])
+colnames(relative_tlt_30) <- colnames(daily_returns)
+colnames(relative_tlt_60) <- colnames(daily_returns)
+colnames(relative_spy_30) <- colnames(daily_returns)
+colnames(relative_spy_60) <- colnames(daily_returns)
+```
+
+```{r dplyr,warning=FALSE,message=FALSE}
+require(dplyr)
+require(tidyr)
+```
+
+# Introduction
+
+## Setup
+
+- Last data date: `r last_data_date`
+- Reference symbols: SPY, TLT
+- Data feed: adjusted close from Yahoo Finance, Quandl
+
+
+# Biggest Movers
+
+## Biggest Moves 30-Days
+
+```{r bigmoves-gain}
+biggest <- 6
+df <- data.frame(cumprod(1 + daily_returns_30))
+odf <- sort(rank(tail(df,1)),decreasing=TRUE)
+bignames <- names(odf)[1:biggest]
+
+df <- df %>% 
+  mutate(Date=as.Date(rownames(df))) %>%
+  select(which(names(df) %in% bignames),Date) %>%
+  gather(Product,Return,-Date)
+p <- ggplot(df,aes(x=Date,y=(Return-1),colour=Product)) +
+  geom_line(size=stroke_size) +
+  labs(x=NULL) +
+  theme(legend.position="right") +
+  scale_y_continuous(labels=percent_format()) +
+  ggtitle("Biggest Gainers Last 30 Days Cumulative Return")
+direct.label(p)
+```
+
+----
+
+```{r,bigmoves-loss}
+biggest <- 6
+df <- data.frame(cumprod(1 + daily_returns_30))
+odf <- sort(rank(tail(df,1)),decreasing=FALSE)
+bignames <- names(odf)[1:biggest]
+
+df <- df %>% 
+  mutate(Date=as.Date(rownames(df))) %>%
+  select(which(names(df) %in% bignames),Date) %>%
+  gather(Product,Return,-Date)
+p <- ggplot(df,aes(x=Date,y=(Return-1),colour=Product)) +
+  geom_line(size=stroke_size) +
+  labs(x=NULL) +
+  theme(legend.position="right") +
+  scale_y_continuous(labels=percent_format()) +
+  ggtitle("Biggest Losers Last 30 Days Cumulative Return")
+direct.label(p)
+```
+
+
+# Macro Performance
+
+## Macro Funds
+
+```{r last-60-days-macro}
+df <- data.frame(cumprod(1 + daily_returns_60[,macro_tickers]))
+df <- df %>% mutate(Date=as.Date(rownames(df))) %>% gather(Product,Return,-Date)
+p <- ggplot(df %>% na.omit,aes(x=Date,y=(Return-1),colour=Product)) +
+  geom_line(size=stroke_size) +
+  labs(x=NULL) +
+  scale_y_continuous(labels=percent_format()) +
+  ggtitle("Macro Last 60 Days Cumulative Return")
+direct.label(p)
+```
+
+----
+
+```{r last-60-days-macro-relative}
+df <- data.frame( relative_spy_60[,macro_tickers] )
+df <- df %>% mutate(Date=as.Date(rownames(df))) %>% gather(Product,Return,-Date)
+p <- ggplot(df %>% na.omit,aes(x=Date,y=Return-1,colour=Product)) +
+  geom_line(size=stroke_size) +
+  labs(x=NULL,y="Relative Return (SPY)") +
+  scale_y_continuous(labels=percent_format()) +
+  ggtitle("Macro Last 60 Days Cumulative Relative Return")
+direct.label(p)
+```
+
+----
+
+```{r last-60-days-macro-relative-bar}
+sr <- relative_spy_60[,macro_tickers] - 1
+df <- data.frame(tail(sr,1))
+df <- df %>% mutate(Date=as.Date(rownames(df))) %>% select(-which(colnames(df)=='SPY')) %>% gather(Product,Return,-Date)
+p <- ggplot(df,aes(x=reorder(Product,desc(Return)),Return,fill=Product)) +
+  geom_bar(stat="identity",position="dodge") +
+  theme(legend.position="off") +
+  scale_y_continuous(labels=percent_format()) +
+  labs(x=NULL,y="Relative Return (%, SPY)") +
+  ggtitle("Macro Last 60 Days Cumulative Relative Return")
+p
+```
+
+----
+
+```{r,macro-relative-multibar}
+sr30 <- relative_spy_30[,macro_tickers] - 1
+sr60 <- relative_spy_60[,macro_tickers] - 1
+df30 <- data.frame(tail(sr30,1))
+df60 <- data.frame(tail(sr60,1))
+df30$Period <- "30 Days"
+df60$Period <- "60 Days"
+df30 <- df30 %>% select(-which(colnames(df30)=='SPY')) %>% gather(Product,Return,1:(ncol(df30)-2))
+df60 <- df60 %>% select(-which(colnames(df60)=='SPY')) %>% gather(Product,Return,1:(ncol(df60)-2))
+df <- rbind(df30,df60)
+p <- ggplot(df,aes(x=reorder(Product,desc(Return)),Return,fill=Product)) +
+  geom_bar(stat="identity",position="dodge") +
+  theme(legend.position="off") +
+  facet_grid(.~Period) +
+  scale_y_continuous(labels=percent_format()) +
+  ggtitle("Macro Cumulative Relative Return by Period") +
+  labs(x=NULL,y="Relative Return (%, SPY)")
+p
+```
+
+# Model Performance
+
+## Bull Model Performance
+
+```{r last-60-days-bull}
+df <- data.frame(cumprod(1 + daily_returns_60[,bull_tickers]))
+df <- df %>% mutate(Date=as.Date(rownames(df))) %>% gather(Product,Return,-Date)
+p <- ggplot(df %>% na.omit,aes(x=Date,y=Return-1,colour=Product)) +
+  geom_line(size=stroke_size) +
+  labs(x=NULL) +
+  scale_y_continuous(labels=percent_format()) +
+  ggtitle("Bull Model Last 60 Days Cumulative Return")
+direct.label(p)
+```
+
+----
+
+```{r last-60-days-bull-relative}
+sr <- relative_spy_60[,bull_tickers]
+df <- data.frame(sr)
+df <- df %>% mutate(Date=as.Date(rownames(df))) %>% gather(Product,Return,-Date)
+p <- ggplot(df %>% na.omit,aes(x=Date,y=Return-1,colour=Product)) +
+  geom_line(size=stroke_size) +
+  labs(x=NULL,y="Relative Return (SPY)") +
+  scale_y_continuous(labels=percent_format()) +
+  ggtitle("Bull Last 60 Days Cumulative Relative Return")
+direct.label(p)
+```
+
+----
+
+```{r last-60-days-bull-relative-bar}
+sr <- relative_spy_60[,bull_tickers] -1
+df <- data.frame(tail(sr,1))
+df <- df %>% mutate(Date=as.Date(rownames(df))) %>% gather(Product,Return,-Date)
+p <- ggplot(df,aes(x=reorder(Product,desc(Return)),Return,fill=Product)) +
+  geom_bar(stat="identity",position="dodge") +
+  theme(legend.position="off") +
+  labs(x=NULL,y="Relative Return (%, SPY)") +
+  scale_y_continuous(labels=percent_format()) +
+  ggtitle("Bull Last 60 Days Cumulative Relative Return")
+p
+```
+
+----
+
+```{r bull-relative-multibar}
+sr30 <- relative_spy_30[,bull_tickers] -1
+sr60 <- relative_spy_60[,bull_tickers] -1
+df30 <- data.frame(tail(sr30,1))
+df60 <- data.frame(tail(sr60,1))
+df30$Period <- "30 Days"
+df60$Period <- "60 Days"
+df30 <- df30 %>% gather(Product,Return,1:(ncol(df30)-2))
+df60 <- df60 %>% gather(Product,Return,1:(ncol(df60)-2))
+df <- rbind(df30,df60)
+p <- ggplot(df,aes(x=reorder(Product,desc(Return)),Return,fill=Product)) +
+  geom_bar(stat="identity",position="dodge") +
+  theme(legend.position="off") +
+  facet_grid(.~Period) +
+  scale_y_continuous(labels=percent_format()) +
+  ggtitle("Bull Relative Return by Period") +
+  labs(x=NULL,y="Relative Return (%,SPY)")
+p
+```
+
+----
+
+```{r bull-absolute-multibar}
+sr30 <- daily_returns_30[,bull_tickers]
+sr60 <- daily_returns_60[,bull_tickers]
+sr30 <- Return.cumulative(sr30)
+sr60 <- Return.cumulative(sr60)
+df30 <- data.frame(sr30)
+df60 <- data.frame(sr60)
+df30$Period <- "30 Days"
+df60$Period <- "60 Days"
+df30 <- df30 %>% gather(Product,Return,1:(ncol(df30)-2))
+df60 <- df60 %>% gather(Product,Return,1:(ncol(df60)-2))
+df <- rbind(df30,df60)
+p <- ggplot(df,aes(x=reorder(Product,desc(Return)),Return,fill=Product)) +
+  geom_bar(stat="identity",position="dodge") +
+  theme(legend.position="off") +
+  facet_grid(.~Period) +
+  scale_y_continuous(labels=percent_format()) +
+  ggtitle("Bull Absolute Return by Period") +
+  labs(x=NULL,y="Period Return (%)")
+p
+```
+----
+
+## Bear Model Performance
+
+```{r last-60-days-bear}
+df <- data.frame(cumprod(1 + daily_returns_60[,bear_tickers]))
+df <- df %>% mutate(Date=as.Date(rownames(df))) %>% gather(Product,Return,-Date)
+p <- ggplot(df %>% na.omit,aes(x=Date,y=Return-1,colour=Product)) +
+  geom_line(size=stroke_size) +
+  labs(x=NULL) +
+  scale_y_continuous(labels=percent_format()) +
+  ggtitle("Bear Model Last 60 Days Cumulative Return")
+direct.label(p)
+```
+
+----
+
+```{r last-60-days-bear-relative}
+sr <- relative_spy_60[,bear_tickers]
+df <- data.frame(sr)
+df <- df %>% mutate(Date=as.Date(rownames(df))) %>% gather(Product,Return,-Date)
+p <- ggplot(df %>% na.omit,aes(x=Date,y=Return-1,colour=Product)) +
+  geom_line(size=stroke_size) +
+  labs(x=NULL,y="Relative Return (SPY)") +
+  scale_y_continuous(labels=percent_format()) +
+  ggtitle("Bear Last 60 Days Cumulative Relative Return")
+direct.label(p)
+```
+
+----
+
+```{r last-60-days-bear-relative-bar}
+sr <- relative_spy_60[,bear_tickers] -1
+df <- data.frame(tail(sr,1))
+df <- df %>% mutate(Date=as.Date(rownames(df))) %>% select(-which(colnames(df)=='SPY')) %>% gather(Product,Return,-Date)
+p <- ggplot(df,aes(x=reorder(Product,desc(Return)),Return,fill=Product)) +
+  geom_bar(stat="identity",position="dodge") +
+  theme(legend.position="off") +
+  labs(x=NULL,y="Relative Return (%, SPY)") +
+  scale_y_continuous(labels=percent_format()) +
+  ggtitle("Bear Last 60 Days Cumulative Relative Return")
+p
+```
+
+----
+
+```{r bear-relative-multibar}
+sr30 <- relative_spy_30[,bear_tickers] -1
+sr60 <- relative_spy_60[,bear_tickers] -1
+df30 <- data.frame(tail(sr30,1))
+df60 <- data.frame(tail(sr60,1))
+df30$Period <- "30 Days"
+df60$Period <- "60 Days"
+df30 <- df30 %>% gather(Product,Return,1:(ncol(df30)-2))
+df60 <- df60 %>% gather(Product,Return,1:(ncol(df60)-2))
+df <- rbind(df30,df60)
+p <- ggplot(df,aes(x=reorder(Product,desc(Return)),Return,fill=Product)) +
+  geom_bar(stat="identity",position="dodge") +
+  theme(legend.position="off") +
+  facet_grid(.~Period) +
+  scale_y_continuous(labels=percent_format()) +
+  ggtitle("Bear Relative Return by Period") +
+  labs(x=NULL,y="Relative Return (%,SPY)")
+p
+```
+
+----
+
+```{r bear-absolute-multibar}
+sr30 <- daily_returns_30[,bear_tickers]
+sr60 <- daily_returns_60[,bear_tickers]
+sr30 <- Return.cumulative(sr30)
+sr60 <- Return.cumulative(sr60)
+df30 <- data.frame(sr30)
+df60 <- data.frame(sr60)
+df30$Period <- "30 Days"
+df60$Period <- "60 Days"
+df30 <- df30 %>% gather(Product,Return,1:(ncol(df30)-2))
+df60 <- df60 %>% gather(Product,Return,1:(ncol(df60)-2))
+df <- rbind(df30,df60)
+p <- ggplot(df,aes(x=reorder(Product,desc(Return)),Return,fill=Product)) +
+  geom_bar(stat="identity",position="dodge") +
+  theme(legend.position="off") +
+  facet_grid(.~Period) +
+  scale_y_continuous(labels=percent_format()) +
+  ggtitle("Bear Absolute Return by Period") +
+  labs(x=NULL,y="Period Return (%)")
+p
+```
+
+----
+
+## Basket Model Performance
+
+```{r last-60-days-basket}
+df <- data.frame(cumprod(1 + daily_returns_60[,basket_tickers]))
+df <- df %>% mutate(Date=as.Date(rownames(df))) %>% gather(Product,Return,-Date)
+p <- ggplot(df %>% na.omit,aes(x=Date,y=Return-1,colour=Product)) +
+  geom_line(size=stroke_size) +
+  labs(x=NULL) +
+  scale_y_continuous(labels=percent_format()) +
+  ggtitle("Basket Model Last 60 Days Cumulative Return")
+direct.label(p)
+```
+
+----
+
+```{r last-60-days-basket-relative}
+sr <- relative_tlt_60[,basket_tickers]
+df <- data.frame(sr)
+df <- df %>% mutate(Date=as.Date(rownames(df))) %>% gather(Product,Return,-Date)
+p <- ggplot(df %>% na.omit,aes(x=Date,y=Return-1,colour=Product)) +
+  geom_line(size=stroke_size) +
+  labs(x=NULL,y="Relative Return (TLT)") +
+  scale_y_continuous(labels=percent_format()) +
+  ggtitle("Basket Last 60 Days Cumulative Relative Return")
+direct.label(p)
+```
+
+----
+
+```{r last-60-days-basket-relative-bar}
+sr <- relative_tlt_60[,basket_tickers] -1 
+df <- data.frame(tail(sr,1))
+df <- df %>% mutate(Date=as.Date(rownames(df))) %>% select(-which(colnames(df)=='TLT')) %>% gather(Product,Return,-Date)
+p <- ggplot(df,aes(x=reorder(Product,desc(Return)),Return,fill=Product)) +
+  geom_bar(stat="identity",position="dodge") +
+  theme(legend.position="off") +
+  labs(x=NULL,y="Relative Return (%, TLT)") +
+  scale_y_continuous(labels=percent_format()) +
+  ggtitle("Basket Last 60 Days Cumulative Relative Return")
+p
+```
+
+----
+
+```{r basket-relative-multibar}
+sr30 <- relative_tlt_30[,basket_tickers] -1
+sr60 <- relative_tlt_60[,basket_tickers] -1
+df30 <- data.frame(tail(sr30,1))
+df60 <- data.frame(tail(sr60,1))
+df30$Period <- "30 Days"
+df60$Period <- "60 Days"
+df30 <- df30 %>% select(-which(colnames(df30)=='TLT')) %>% gather(Product,Return,1:(ncol(df30)-2))
+df60 <- df60 %>% select(-which(colnames(df60)=='TLT')) %>% gather(Product,Return,1:(ncol(df60)-2))
+df <- rbind(df30,df60)
+p <- ggplot(df,aes(x=reorder(Product,desc(Return)),Return,fill=Product)) +
+  geom_bar(stat="identity",position="dodge") +
+  theme(legend.position="off") +
+  facet_grid(.~Period) +
+  scale_y_continuous(labels=percent_format()) +
+  ggtitle("Basket Relative Return by Period") +
+  labs(x=NULL,y="Relative Return (%,TLT)")
+p
+```
+
+----
+
+```{r basket-absolute-multibar}
+sr30 <- daily_returns_30[,basket_tickers]
+sr60 <- daily_returns_60[,basket_tickers]
+sr30 <- Return.cumulative(sr30)
+sr60 <- Return.cumulative(sr60)
+df30 <- data.frame(sr30)
+df60 <- data.frame(sr60)
+df30$Period <- "30 Days"
+df60$Period <- "60 Days"
+df30 <- df30 %>% select(-which(colnames(df30)=='TLT')) %>% gather(Product,Return,1:(ncol(df30)-2))
+df60 <- df60 %>% select(-which(colnames(df60)=='TLT')) %>% gather(Product,Return,1:(ncol(df60)-2))
+df <- rbind(df30,df60)
+p <- ggplot(df,aes(x=reorder(Product,desc(Return)),Return,fill=Product)) +
+  geom_bar(stat="identity",position="dodge") +
+  theme(legend.position="off") +
+  facet_grid(.~Period) +
+  scale_y_continuous(labels=percent_format()) +
+  ggtitle("Basket Absolute Return by Period") +
+  labs(x=NULL,y="Period Return (%)")
+p
+```
+
+# Volatility
+
+## Equity Index Volatility
+
+```{r volatility}
+vix <- Quandl("CBOE/VIX",type="xts",order="asc",start_date=start_date)
+vix <- Cl(vix)
+colnames(vix) <- "VIX"
+
+vxst <- Quandl("CBOE/VXST",type="xts",order="asc",start_date=start_date)
+vxst <- Cl(vxst)
+colnames(vxst) <- "VXST"
+
+vxmt <- Quandl("CBOE/VXMT",type="xts",order="asc",start_date=start_date)
+vxmt <- Cl(vxmt)
+colnames(vxmt) <- "VXMT"
+
+df <- cbind( data.frame( xts::last(vix, "90 days") ),
+             data.frame( xts::last(vxmt,"90 days") ), 
+             data.frame( xts::last(vxst,"90 days") )) 
+df <- df %>% mutate(Date=as.Date(rownames(df))) %>% gather(Product,Value,-Date)
+p <- ggplot(df %>% na.omit,aes(x=Date,y=Value,colour=Product)) +
+  geom_line(size=stroke_size) +
+  labs(x=NULL,y="Volatility Value") +
+  ggtitle("CBOE Volatility Index Last 90 Days")
+direct.label(p)
+
+```
+
+
+```{r skew}
+skew <- Quandl("CBOE/SKEW",type="xts",order="asc",start_date=start_date)
+colnames(skew) <- "SKEW"
+skew$MA50 <- SMA(skew$SKEW,n=50)
+
+df <- data.frame( xts::last(skew,"90 days") )
+
+df <- df %>% mutate(Date=as.Date(rownames(df))) %>% gather(Product,Value,-Date)
+p <- ggplot(df %>% na.omit,aes(x=Date,y=Value,colour=Product)) +
+  geom_line(size=stroke_size) +
+  labs(x=NULL,y="Skew Value") +
+  ggtitle("CBOE Volatility Skew Last 90 Days")
+direct.label(p)
+
+```
+
+
+```{r lovol}
+lovol <- Quandl("CBOE/LOVOL",type="xts",order="asc",start_date=start_date)
+lovol <- Cl(lovol)
+colnames(lovol) <- "LOVOL"
+lovol$MA50 <- SMA(lovol$LOVOL,n=50)
+
+df <- data.frame( xts::last(lovol,"90 days") )
+
+df <- df %>% mutate(Date=as.Date(rownames(df))) %>% gather(Product,Value,-Date)
+p <- ggplot(df %>% na.omit,aes(x=Date,y=Value,colour=Product)) +
+  geom_line(size=stroke_size) +
+  labs(x=NULL,y="Index Value") +
+  ggtitle("CBOE Low Volatility Index Last 90 Days")
+direct.label(p)
+
+```
+
+
+```{r eemvol}
+vxeem <- Quandl("CBOE/VXEEM",type="xts",order="asc",start_date=start_date)
+vxeem <- Cl(vxeem)
+colnames(vxeem) <- "VXEEM"
+vxeem$MA50 <- SMA(vxeem$VXEEM,n=50)
+
+df.xts <- xts::last(vxeem,"90 days")
+ef.xts <- Cl(xts::last( get("EEM",envir=exchange_data), "90 days") )
+colnames(ef.xts) <- "EEM"
+df <- data.frame(cbind(df.xts,ef.xts))
+
+df <- df %>% mutate(Date=as.Date(rownames(df))) %>% gather(Product,Value,-Date)
+df$Panel <- 2
+df$Panel[which(df$Product=="EEM")] <- 1
+
+p <- ggplot(df %>% na.omit,aes(x=Date,y=Value,colour=Product)) +
+  geom_line(size=stroke_size) +
+  labs(x=NULL,y="Volatility Value") +
+  ggtitle("CBOE Emerging Market Volatility Index Last 90 Days") +
+  facet_grid(Panel~.,scales="free_y")
+direct.label(p)
+
+```
+
+```{r indexop}
+SPXPC <- Quandl("CBOE/SPX_PC",type="xts",order="asc",start_date=start_date)
+
+# CBOE/SPX_PC
+# CBOE/VIX_PC
+# CBOE/ETP_PC
+# CBOE/EQUITY_PC
+# CBOE/INDEX_PC
+# CBOE/TOTAL_PC
+# CBOE/INDEX_PC_ARCHIVE  10/2003 to 6/2012.
+# CBOE/COMBINED_PC_ARCHIVE  Total Put-Call Ratio from 9/1995 to 10/2003. Total, Index and Equity Put-Call Ratios from 10/2003 to 12/2003.
+# CBOE/PUT put write index
+
+SPXPC <- SPXPC[,1]
+colnames(SPXPC) <- "SPX"
+SPXPC$MA10 <- SMA(SPXPC$SPX,n=10)
+SPXPC.mean <- mean(SPXPC,na.rm=TRUE)
+SPXPC.sd <- sd(SPXPC,na.rm=TRUE)
+
+df <- data.frame( xts::last(SPXPC,"90 days") )
+
+df <- df %>% mutate(Date=as.Date(rownames(df))) %>% gather(Product,Value,-Date)
+p <- ggplot(df %>% na.omit,aes(x=Date,y=Value,colour=Product)) +
+  geom_line(size=stroke_size) +
+  labs(x=NULL,y="Put-Call Ratio") +
+  ggtitle("CBOE S&P 500 Index Put-Call Ratio Last 90 Days") +
+  geom_hline(yintercept = SPXPC.mean, color="darkgray" ) +
+  geom_hline(yintercept = SPXPC.mean + SPXPC.sd, color="darkgray", linetype="dotted") +
+  geom_hline(yintercept = SPXPC.mean - SPXPC.sd, color="darkgray", linetype="dotted")
+direct.label(p)
+
+```
