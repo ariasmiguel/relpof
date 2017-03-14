@@ -536,8 +536,8 @@ colnames(spy) <- "SPY"
 df <- data.frame( xts::last( cbind(vix, vxmt, vxst, spy ), "90 days")) 
 
 df <- df %>% mutate(Date=as.Date(rownames(df))) %>% gather(Product,Value,-Date)
-df$Panel <- 2
-df$Panel[which(df$Product=="SPY")] <- 1
+df$Panel <- "ETF"
+df$Panel[which(df$Product=="SPY")] <- "Volatility"
 
 p <- ggplot(df %>% na.omit,aes(x=Date,y=Value,colour=Product)) +
   geom_line(size=stroke_size) +
@@ -561,8 +561,8 @@ colnames(sf.xts) <- "SPY"
 df <- data.frame(cbind(df.xts,sf.xts))
 
 df <- df %>% mutate(Date=as.Date(rownames(df))) %>% gather(Product,Value,-Date)
-df$Panel <- 2
-df$Panel[which(df$Product=="SPY")] <- 1
+df$Panel <- "ETF"
+df$Panel[which(df$Product=="SPY")] <- "Skew Index"
 
 p <- ggplot(df %>% na.omit,aes(x=Date,y=Value,colour=Product)) +
   geom_line(size=stroke_size) +
@@ -606,8 +606,8 @@ colnames(ef.xts) <- "EEM"
 df <- data.frame(cbind(df.xts,ef.xts))
 
 df <- df %>% mutate(Date=as.Date(rownames(df))) %>% gather(Product,Value,-Date)
-df$Panel <- 2
-df$Panel[which(df$Product=="EEM")] <- 1
+df$Panel <- "Volatility"
+df$Panel[which(df$Product=="EEM")] <- "ETF"
 
 p <- ggplot(df %>% na.omit,aes(x=Date,y=Value,colour=Product)) +
   geom_line(size=stroke_size) +
@@ -619,6 +619,33 @@ direct.label(p)
 ```
 
 ----
+
+```{r gldvol}
+gvz <- Quandl("CBOE/GVZ",type="xts",order="asc",start_date=start_date)
+colnames(gvz) <- "GVZ"
+gvz$MA50 <- SMA(gvz$GVZ,n=50)
+
+df.xts <- xts::last(gvz,"90 days")
+gf.xts <- Cl(xts::last( get("GLD",envir=exchange_data), "90 days") )
+colnames(gf.xts) <- "GLD"
+df <- data.frame(cbind(df.xts,gf.xts))
+
+df <- df %>% mutate(Date=as.Date(rownames(df))) %>% gather(Product,Value,-Date)
+df$Panel <- "Volatility"
+df$Panel[which(df$Product=="GLD")] <- "ETF"
+
+p <- ggplot(df %>% na.omit,aes(x=Date,y=Value,colour=Product)) +
+  geom_line(size=stroke_size) +
+  labs(x=NULL,y="Volatility Value and ETF Price") +
+  ggtitle("CBOE Gold ETF Volatility Index Last 90 Days") +
+  facet_grid(Panel~.,scales="free_y")
+direct.label(p)
+
+```
+
+# Options Market
+
+## Put/Call Ratios
 
 ```{r indexop}
 SPXPC <- Quandl("CBOE/SPX_PC",type="xts",order="asc",start_date=start_date)
@@ -639,6 +666,8 @@ SPXPC$MA10 <- SMA(SPXPC$SPX,n=10)
 SPXPC.mean <- mean(SPXPC,na.rm=TRUE)
 SPXPC.sd <- sd(SPXPC,na.rm=TRUE)
 
+
+
 df <- data.frame( xts::last(SPXPC,"90 days") )
 
 df <- df %>% mutate(Date=as.Date(rownames(df))) %>% gather(Product,Value,-Date)
@@ -651,4 +680,42 @@ p <- ggplot(df %>% na.omit,aes(x=Date,y=Value,colour=Product)) +
   geom_hline(yintercept = SPXPC.mean - SPXPC.sd, color="darkgray", linetype="dotted")
 direct.label(p)
 
+```
+
+----
+
+```{r mixpc}
+EPC <- Quandl("CBOE/EQUITY_PC",type="xts",order="asc",start_date=start_date)
+IPC <- Quandl("CBOE/INDEX_PC",type="xts",order="asc",start_date=start_date)
+TPC <- Quandl("CBOE/TOTAL_PC",type="xts",order="asc",start_date=start_date)
+
+EPC <- EPC[,4] # cvol, pvol, tvol, ratio
+colnames(EPC) <- "EPC"
+IPC <- IPC[,4] # cvol, pvol, tvol, ratio
+colnames(IPC) <- "IPC"
+TPC <- TPC[,4] # cvol, pvol, tvol, ratio
+colnames(TPC) <- "TPC"
+
+EPC$MA5 <- SMA(EPC,n=5)
+IPC$MA5 <- SMA(IPC,n=5)
+TPC$MA5 <- SMA(TPC,n=5)
+
+sf.xts <- Cl( get("SPY",envir=exchange_data) )
+
+df.xts <- cbind(EPC$MA5,IPC$MA5,TPC$MA5,sf.xts)
+colnames(df.xts) <- c("Equity","Index","Total","SPY")
+
+df <- data.frame( xts::last(df.xts ,"90 days") )
+
+df <- df %>% mutate(Date=as.Date(rownames(df))) %>% gather(Product,Value,-Date)
+df$Panel <- "Put-Call Ratios"
+df$Panel[which(df$Product=="SPY")] <- "ETF"
+
+p <- ggplot(df %>% na.omit,aes(x=Date,y=Value,colour=Product)) +
+  geom_line(size=stroke_size) +
+  labs(x=NULL,y="Put-Call Ratio (5-Day MA) and Price ($)") +
+  ggtitle("CBOE S&P 500 Put-Call Ratio Last 90 Days") +
+  facet_grid(Panel~.,scales="free_y")
+
+direct.label(p)
 ```
