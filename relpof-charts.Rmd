@@ -105,6 +105,9 @@ if ( file.exists( exchange_file )) {
   MLAAOAS <- Quandl("ML/AAOAS",type="xts",order="asc",start_date=start_date)
   MLBOAS <- Quandl("ML/BOAS",type="xts",order="asc",start_date=start_date)
   MLHYOAS <- Quandl("ML/HYOAS",type="xts",order="asc",start_date=start_date)
+  MLAAY <- Quandl("ML/AAY",type="xts",order="asc",start_date=start_date)
+  MLBBY <- Quandl("ML/BBY",type="xts",order="asc",start_date=start_date)
+  MLCCCY <- Quandl("ML/CCCY",type="xts",order="asc",start_date=start_date)
 
   assign("CCHA",CCHA,envir=exchange_data)
   assign("TPCA",TPCA,envir=exchange_data)
@@ -123,6 +126,9 @@ if ( file.exists( exchange_file )) {
   assign("MLAAOAS",MLAAOAS,envir=exchange_data)
   assign("MLBOAS",MLBOAS,envir=exchange_data)
   assign("MLHYOAS",MLHYOAS,envir=exchange_data)
+  assign("MLAAY",MLAAY,envir=exchange_data)
+  assign("MLBBY",MLBBY,envir=exchange_data)
+  assign("MLCCCY",MLCCCY,envir=exchange_data)
 
 }
   
@@ -171,7 +177,8 @@ require(tidyr)
 
 - Last data date: `r last_data_date`
 - Reference symbols: SPY, TLT
-- Data feed: adjusted close from Yahoo Finance, Quandl
+- Data feed: Yahoo! Finance
+- Data feed: Quandl CBOE, Merrill-Lynch
 
 
 # Biggest Movers
@@ -828,3 +835,70 @@ p <- ggplot(df %>% na.omit,aes(x=Date,y=Value,colour=Product)) +
 direct.label(p)
 
 ```
+
+# Corporate Debt
+
+## Merrill-Lynch Bond Indices
+
+
+```{r oas}
+MLAAOAS <- get("MLAAOAS",envir=exchange_data)
+MLBOAS <- get("MLBOAS",envir=exchange_data)
+MLHYOAS <- get("MLHYOAS",envir=exchange_data)
+ml.xts <- cbind(MLAAOAS,MLBOAS,MLHYOAS)
+colnames(ml.xts) <- c("AA","B","HY")
+
+sf.xts <- Cl(get("SPY",envir=exchange_data))
+colnames(sf.xts) <- "SPY"
+
+df.xts <- cbind(ml.xts,sf.xts)
+
+df <- data.frame(xts::last(df.xts,"12 months"))
+
+df <- df %>% mutate(Date=as.Date(rownames(df))) %>% gather(Product,Value,-Date)
+df$Panel <- "Spread (%)"
+df$Panel[which(df$Product=="SPY")] <- "ETF ($)"
+
+p <- ggplot(df %>% na.omit,aes(x=Date,y=Value,colour=Product)) +
+  geom_line(size=stroke_size) +
+  labs(x=NULL,y="Option-Adjusted Spread and Price") +
+  ggtitle("Corporate Bond Spread and Equity Price Comparison") +
+  facet_grid(Panel~.,scales="free_y")
+
+direct.label(p)
+
+```
+
+----
+
+```{r yyy}
+MLAAY <- get("MLAAY",envir=exchange_data)
+MLBBY <- get("MLBBY",envir=exchange_data)
+MLCCCY <- get("MLCCCY",envir=exchange_data)
+ml.xts <- cbind(MLAAY,MLBBY,MLCCCY)
+colnames(ml.xts) <- c("AA","BB","CCC")
+
+sf.xts <- Cl(get("SPY",envir=exchange_data))
+colnames(sf.xts) <- "SPY"
+
+df.xts <- cbind(ml.xts,sf.xts)
+
+df <- data.frame(xts::last(df.xts,"12 months"))
+
+df <- df %>% mutate(Date=as.Date(rownames(df))) %>% gather(Product,Value,-Date)
+df$Panel <- "Yield (%)"
+df$Panel[which(df$Product=="SPY")] <- "ETF ($)"
+
+p <- ggplot(df %>% na.omit,aes(x=Date,y=Value,colour=Product)) +
+  geom_line(size=stroke_size) +
+  labs(x=NULL,y="Corporate Bond Yield and Price") +
+  ggtitle("Corporate Bond Yield and Equity Price Comparison") +
+  facet_grid(Panel~.,scales="free_y")
+
+direct.label(p)
+
+```
+
+
+
+       
