@@ -60,7 +60,7 @@ basket_tickers <- c("VTI","VGK","EWJ","EEM","IEF","ICF","RWX","DBC","GLD","TLT")
 
 all_symbols <- sort(unique(c(
                              macro_tickers,
-			     bull_tickers,
+			                       bull_tickers,
                              bear_tickers,
                              basket_tickers
                              )))
@@ -70,6 +70,7 @@ if ( file.exists( exchange_file )) {
   load( exchange_file ) # loads exchange data environment
   missing_tickers <- get("missing_tickers",envir=exchange_data)
 } else {
+  # Yahoo
   for ( s in seq_along(all_symbols)) {
     symbol <- all_symbols[s]
     message(paste("Fetching",symbol))
@@ -84,6 +85,45 @@ if ( file.exists( exchange_file )) {
       }
     )
   }
+  
+  # Quandl
+  message("Fetching Quandl data")
+  CCHA <- Quandl("CBOE/COMBINED_PC_ARCHIVE",type="xts",order="asc",start_date="1980-01-01")
+  TPCA <- Quandl("CBOE/TOTAL_PC_ARCHIVE",type="xts",order="asc",start_date="1980-01-01")
+  TPC <- Quandl("CBOE/TOTAL_PC",type="xts",order="asc",start_date="1980-01-01")
+  VIX <- Quandl("CBOE/VIX",type="xts",order="asc",start_date=start_date)
+  VXST <- Quandl("CBOE/VXST",type="xts",order="asc",start_date=start_date)
+  VXMT <- Quandl("CBOE/VXMT",type="xts",order="asc",start_date=start_date)
+  SKEW <- Quandl("CBOE/SKEW",type="xts",order="asc",start_date=start_date)
+  LOVOL <- Quandl("CBOE/LOVOL",type="xts",order="asc",start_date=start_date)
+  VXEEM <- Quandl("CBOE/VXEEM",type="xts",order="asc",start_date=start_date)
+  GVZ <- Quandl("CBOE/GVZ",type="xts",order="asc",start_date=start_date)
+  SPXPC <- Quandl("CBOE/SPX_PC",type="xts",order="asc",start_date=start_date)
+  EQUITY_PC <- Quandl("CBOE/EQUITY_PC",type="xts",order="asc",start_date=start_date)
+  INDEX_PC <- Quandl("CBOE/INDEX_PC",type="xts",order="asc",start_date=start_date)
+  TOTAL_PC <- Quandl("CBOE/TOTAL_PC",type="xts",order="asc",start_date=start_date)
+  MLAAOAS <- Quandl("ML/AAOAS",type="xts",order="asc",start_date=start_date)
+  MLBOAS <- Quandl("ML/BOAS",type="xts",order="asc",start_date=start_date)
+  MLHYOAS <- Quandl("ML/HYOAS",type="xts",order="asc",start_date=start_date)
+
+  assign("CCHA",CCHA,envir=exchange_data)
+  assign("TPCA",TPCA,envir=exchange_data)
+  assign("TPC",TPC,envir=exchange_data)
+  assign("VIX",VIX,envir=exchange_data)
+  assign("VXST",VXST,envir=exchange_data)
+  assign("VXMT",VXMT,envir=exchange_data)
+  assign("SKEW",SKEW,envir=exchange_data)
+  assign("LOVOL",LOVOL,envir=exchange_data)
+  assign("VXEEM",VXEEM,envir=exchange_data)
+  assign("GVZ",GVZ,envir=exchange_data)
+  assign("SPXPC",SPXPC,envir=exchange_data)
+  assign("EQUITY_PC",EQUITY_PC,envir=exchange_data)
+  assign("INDEX_PC",INDEX_PC,envir=exchange_data)
+  assign("TOTAL_PC",TOTAL_PC,envir=exchange_data)
+  assign("MLAAOAS",MLAAOAS,envir=exchange_data)
+  assign("MLBOAS",MLBOAS,envir=exchange_data)
+  assign("MLHYOAS",MLHYOAS,envir=exchange_data)
+
 }
   
 assign("missing_tickers",missing_tickers,envir=exchange_data)
@@ -518,16 +558,11 @@ p
 ## Equity Index Volatility
 
 ```{r volatility}
-vix <- Quandl("CBOE/VIX",type="xts",order="asc",start_date=start_date)
-vix <- Cl(vix)
+vix <- Cl(get("VIX",envir=exchange_data))
 colnames(vix) <- "VIX"
-
-vxst <- Quandl("CBOE/VXST",type="xts",order="asc",start_date=start_date)
-vxst <- Cl(vxst)
+vxst <- Cl(get("VXST",envir=exchange_data))
 colnames(vxst) <- "VXST"
-
-vxmt <- Quandl("CBOE/VXMT",type="xts",order="asc",start_date=start_date)
-vxmt <- Cl(vxmt)
+vxmt <- Cl(get("VXMT",envir=exchange_data))
 colnames(vxmt) <- "VXMT"
 
 spy <- Cl( get("SPY",envir=exchange_data) )
@@ -536,8 +571,8 @@ colnames(spy) <- "SPY"
 df <- data.frame( xts::last( cbind(vix, vxmt, vxst, spy ), "90 days")) 
 
 df <- df %>% mutate(Date=as.Date(rownames(df))) %>% gather(Product,Value,-Date)
-df$Panel <- "ETF"
-df$Panel[which(df$Product=="SPY")] <- "Volatility"
+df$Panel <- "Volatility"
+df$Panel[which(df$Product=="SPY")] <- "ETF"
 
 p <- ggplot(df %>% na.omit,aes(x=Date,y=Value,colour=Product)) +
   geom_line(size=stroke_size) +
@@ -551,7 +586,7 @@ direct.label(p)
 ----
 
 ```{r skew}
-skew <- Quandl("CBOE/SKEW",type="xts",order="asc",start_date=start_date)
+skew <- get("SKEW",envir=exchange_data)
 colnames(skew) <- "SKEW"
 skew$MA50 <- SMA(skew$SKEW,n=50)
 
@@ -561,8 +596,8 @@ colnames(sf.xts) <- "SPY"
 df <- data.frame(cbind(df.xts,sf.xts))
 
 df <- df %>% mutate(Date=as.Date(rownames(df))) %>% gather(Product,Value,-Date)
-df$Panel <- "ETF"
-df$Panel[which(df$Product=="SPY")] <- "Skew Index"
+df$Panel <- "Skew Index"
+df$Panel[which(df$Product=="SPY")] <- "ETF"
 
 p <- ggplot(df %>% na.omit,aes(x=Date,y=Value,colour=Product)) +
   geom_line(size=stroke_size) +
@@ -576,8 +611,7 @@ direct.label(p)
 ----
 
 ```{r lovol}
-lovol <- Quandl("CBOE/LOVOL",type="xts",order="asc",start_date=start_date)
-lovol <- Cl(lovol)
+lovol <- Cl(get("LOVOL",envir=exchange_data))
 colnames(lovol) <- "LOVOL"
 lovol$MA50 <- SMA(lovol$LOVOL,n=50)
 
@@ -595,8 +629,7 @@ direct.label(p)
 ----
 
 ```{r eemvol}
-vxeem <- Quandl("CBOE/VXEEM",type="xts",order="asc",start_date=start_date)
-vxeem <- Cl(vxeem)
+vxeem <- Cl(get("VXEEM",envir=exchange_data))
 colnames(vxeem) <- "VXEEM"
 vxeem$MA50 <- SMA(vxeem$VXEEM,n=50)
 
@@ -621,7 +654,7 @@ direct.label(p)
 ----
 
 ```{r gldvol}
-gvz <- Quandl("CBOE/GVZ",type="xts",order="asc",start_date=start_date)
+gvz <- get("GVZ",envir=exchange_data)
 colnames(gvz) <- "GVZ"
 gvz$MA50 <- SMA(gvz$GVZ,n=50)
 
@@ -648,7 +681,7 @@ direct.label(p)
 ## Put/Call Ratios
 
 ```{r indexop}
-SPXPC <- Quandl("CBOE/SPX_PC",type="xts",order="asc",start_date=start_date)
+SPXPC <- get("SPXPC",envir=exchange_data)
 
 # CBOE/SPX_PC
 # CBOE/VIX_PC
@@ -675,7 +708,7 @@ df <- data.frame( xts::last(SPXPC,"90 days") )
 df <- df %>% mutate(Date=as.Date(rownames(df))) %>% gather(Product,Value,-Date)
 p <- ggplot(df %>% na.omit,aes(x=Date,y=Value,colour=Product)) +
   geom_line(size=stroke_size) +
-  labs(x=NULL,y="Put-Call Ratio") +
+  labs(x=NULL,y="Put-Call Ratio (Historical Mean. 1-Sigma)") +
   ggtitle("CBOE S&P 500 Index Put-Call Ratio Last 90 Days") +
   geom_hline(yintercept = SPXPC.mean, color="darkgray" ) +
   geom_hline(yintercept = SPXPC.mean + SPXPC.sd, color="darkgray", linetype="dotted") +
@@ -687,9 +720,10 @@ direct.label(p)
 ----
 
 ```{r mixpc}
-EPC <- Quandl("CBOE/EQUITY_PC",type="xts",order="asc",start_date=start_date)
-IPC <- Quandl("CBOE/INDEX_PC",type="xts",order="asc",start_date=start_date)
-TPC <- Quandl("CBOE/TOTAL_PC",type="xts",order="asc",start_date=start_date)
+
+EPC <- get("EQUITY_PC",envir=exchange_data)
+IPC <- get("INDEX_PC",envir=exchange_data)
+TPC <- get("TOTAL_PC",envir=exchange_data)
 
 EPC <- EPC[,4] # cvol, pvol, tvol, ratio
 colnames(EPC) <- "EPC"
@@ -722,27 +756,74 @@ p <- ggplot(df %>% na.omit,aes(x=Date,y=Value,colour=Product)) +
 direct.label(p)
 ```
 
+---
+
 ```{r tpchist}
 # CCHA range 1995-09-27 to 2003-12-31 columns TPCR, IPCR, EPCR (mislabeled)
 # TPCA range 2003-10-17 to 2012-06-07  
 # TPC  range 2006-11-01 to present
-CCHA <- Quandl("CBOE/COMBINED_PC_ARCHIVE",type="xts",order="asc",start_date="1980-01-01")
-TPCA <- Quandl("CBOE/TOTAL_PC_ARCHIVE",type="xts",order="asc",start_date="1980-01-01")
-TPC <- Quandl("CBOE/TOTAL_PC",type="xts",order="asc",start_date="1980-01-01")
+CCHA <- get("CCHA",envir=exchange_data)
+TPCA <- get("TPCA",envir=exchange_data)
+TPC <- get("TPC",envir=exchange_data)
 colnames(CCHA) <- c("Total","Index","Equity")
 colnames(TPCA) <- c("Call","Put","Volume","Total")
 colnames(TPC) <- c("Call","Put","Volume","Total")
 total.xts <- rbind(CCHA["/2003-12-31","Total"],
                    TPCA["2004-01-01/2006-10-30","Total"],
                    TPC["2006-11-01/","Total"])
+total.xts$MA30 <- SMA(total.xts$Total,n=30)
+sf.xts <- Cl(get("SPY",envir=exchange_data))
+colnames(sf.xts) <- "SPY"
+df.xts <- cbind(total.xts,sf.xts)
+df <- data.frame(xts::last(df.xts,"5 years"))
 
-df <- data.frame(total.xts)
-df <- df %>% mutate(Date=as.Date(rownames(df))) %>% gather(Product,Value,-Date)
+df <- df %>% mutate(Date=as.Date(rownames(df))) %>% gather(Product,Value,-Date, -Total)
+df$Panel <- "Total Put-Call Ratio"
+df$Panel[which(df$Product=="SPY")] <- "SPY"
 
 p <- ggplot(df %>% na.omit,aes(x=Date,y=Value,colour=Product)) +
   geom_line(size=stroke_size) +
   labs(x=NULL,y="Total Put-Call Ratio") +
-  ggtitle("CBOE S&P 500 Put-Call Ratio History") 
+  ggtitle("CBOE S&P 500 Put-Call Ratio History") +
+  facet_grid(Panel~.,scales="free_y")
+
+direct.label(p)
+
+```
+
+---
+
+```{r tpcrsi}
+CCHA <- get("CCHA",envir=exchange_data)
+TPCA <- get("TPCA",envir=exchange_data)
+TPC <- get("TPC",envir=exchange_data)
+colnames(CCHA) <- c("Total","Index","Equity")
+colnames(TPCA) <- c("Call","Put","Volume","Total")
+colnames(TPC) <- c("Call","Put","Volume","Total")
+total.xts <- rbind(CCHA["/2003-12-31","Total"],
+                   TPCA["2004-01-01/2006-10-30","Total"],
+                   TPC["2006-11-01/","Total"])
+total.xts$MA30 <- SMA(total.xts$Total,n=30)
+sf.xts <- Cl(get("SPY",envir=exchange_data))
+colnames(sf.xts) <- "SPY"
+
+sf.xts$RSI <- TTR::RSI(sf.xts$SPY,n=14)
+total.xts$RSI <- TTR::RSI(total.xts$MA30,n=14)
+
+df.xts <- cbind(total.xts$RSI,sf.xts$RSI)
+colnames(df.xts) <- c("Total","SPY")
+
+df <- data.frame(xts::last(df.xts,"3 years"))
+
+df <- df %>% mutate(Date=as.Date(rownames(df))) %>% gather(Product,Value,-Date)
+df$Panel <- "TPCR MA30 RSI14"
+df$Panel[which(df$Product=="SPY")] <- "SPY RSI14"
+
+p <- ggplot(df %>% na.omit,aes(x=Date,y=Value,colour=Product)) +
+  geom_line(size=stroke_size) +
+  labs(x=NULL,y="Total Put-Call Ratio and Price") +
+  ggtitle("CBOE S&P 500 Put-Call Ratio RSI Comparison") +
+  facet_grid(Panel~.,scales="free_y")
 
 direct.label(p)
 
