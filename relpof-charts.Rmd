@@ -656,8 +656,10 @@ SPXPC <- Quandl("CBOE/SPX_PC",type="xts",order="asc",start_date=start_date)
 # CBOE/EQUITY_PC
 # CBOE/INDEX_PC
 # CBOE/TOTAL_PC
-# CBOE/INDEX_PC_ARCHIVE  10/2003 to 6/2012.
-# CBOE/COMBINED_PC_ARCHIVE  Total Put-Call Ratio from 9/1995 to 10/2003. Total, Index and Equity Put-Call Ratios from 10/2003 to 12/2003.
+# CBOE/TOTAL_PC_ARCHIVE  2003-10-17 to 2012-06-07
+# CBOE/INDEX_PC_ARCHIVE  2003-10-16 to 2012-06-07
+# CBOE/EQUITY_PC_ARCHIVE 2003-10-17 to 2012-06-07
+# CBOE/COMBINED_PC_ARCHIVE  1995-09-27 to 2003-12-31 (TPC, IPC, EPC only (mislabeled))
 # CBOE/PUT put write index
 
 SPXPC <- SPXPC[,1]
@@ -718,4 +720,30 @@ p <- ggplot(df %>% na.omit,aes(x=Date,y=Value,colour=Product)) +
   facet_grid(Panel~.,scales="free_y")
 
 direct.label(p)
+```
+
+```{r tpchist}
+# CCHA range 1995-09-27 to 2003-12-31 columns TPCR, IPCR, EPCR (mislabeled)
+# TPCA range 2003-10-17 to 2012-06-07  
+# TPC  range 2006-11-01 to present
+CCHA <- Quandl("CBOE/COMBINED_PC_ARCHIVE",type="xts",order="asc",start_date="1980-01-01")
+TPCA <- Quandl("CBOE/TOTAL_PC_ARCHIVE",type="xts",order="asc",start_date="1980-01-01")
+TPC <- Quandl("CBOE/TOTAL_PC",type="xts",order="asc",start_date="1980-01-01")
+colnames(CCHA) <- c("Total","Index","Equity")
+colnames(TPCA) <- c("Call","Put","Volume","Total")
+colnames(TPC) <- c("Call","Put","Volume","Total")
+total.xts <- rbind(CCHA["/2003-12-31","Total"],
+                   TPCA["2004-01-01/2006-10-30","Total"],
+                   TPC["2006-11-01/","Total"])
+
+df <- data.frame(total.xts)
+df <- df %>% mutate(Date=as.Date(rownames(df))) %>% gather(Product,Value,-Date)
+
+p <- ggplot(df %>% na.omit,aes(x=Date,y=Value,colour=Product)) +
+  geom_line(size=stroke_size) +
+  labs(x=NULL,y="Total Put-Call Ratio") +
+  ggtitle("CBOE S&P 500 Put-Call Ratio History") 
+
+direct.label(p)
+
 ```
