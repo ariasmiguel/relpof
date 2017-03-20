@@ -46,7 +46,7 @@ knitr::opts_chunk$set(
 
 quandl_api <- params$quandl_api
 if (is.na(quandl_api) || ("NA" == quandl_api)) {
-   quandl_api <- Sys.getenv("QUANDL_APIKEY")
+   quandl_api <- Sys.getenv("QUANDL_API")
 }
 Quandl.api_key(quandl_api) # authenticate
 
