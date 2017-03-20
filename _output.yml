@@ -1,6 +1,6 @@
 beamer_presentation:
-  theme: "CambridgeUS"
-  colortheme: "beaver"
+  theme: "Ilmenau"
+  colortheme: "default"
   toc: true
   slide_level: 2
   fig_width: 7
