@@ -1,5 +1,5 @@
 
-# Fidelity Relative Performance Report
+# Relative Performance Report
 
 ## Product
 
@@ -7,8 +7,11 @@ This report provides charts summarizing relative performance within
 and among various asset groups.  It uses ETF proxies and daily returns
 for the following groups: 
 - Domestic equities 
-- Emerging marketequities 
+- Emerging market equities 
 - Global macro
+- Volatility
+- Equity Options
+- Corporate debt
 
 
 ## Tooling
