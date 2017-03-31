@@ -747,8 +747,11 @@ sf.xts <- Cl( get("SPY",envir=exchange_data) )
 
 df.xts <- cbind(EPC$MA5,IPC$MA5,TPC$MA5,sf.xts)
 colnames(df.xts) <- c("Equity","Index","Total","SPY")
-
 df <- data.frame( xts::last(df.xts ,"90 days") )
+
+# peaks.xts <- xts::last(df.xts[findPeaks(df.xts$Index,thresh=0.1),],"90 days")
+# peaks.df <- data.frame( peaks.xts )
+# peaks.df <- peaks.df %>% mutate(Date=as.Date(rownames(peaks.df)))
 
 df <- df %>% mutate(Date=as.Date(rownames(df))) %>% gather(Product,Value,-Date)
 df$Panel <- "Put-Call Ratios"
@@ -897,6 +900,40 @@ p <- ggplot(df %>% na.omit,aes(x=Date,y=Value,colour=Product)) +
 
 direct.label(p)
 
+```
+
+# Correlation
+
+## Rolling Correlation of Asset Class Returns
+
+
+```{r monthly}
+monthly_closing_prices <- closing_prices[endpoints(closing_prices,"months"),]
+monthly_returns <- monthly_closing_prices / stats::lag(monthly_closing_prices) - 1
+monthly_returns <- monthly_returns[-1]
+monthly_returns[is.na(monthly_returns)] <- 0
+```
+
+
+```{r mcorr}
+cdata <- monthly_returns[,c('SPY','AGG','DBC','EEM','GLD','UUP','VNQ')]
+
+rcorr <- rollapply(cdata[,2:7], width=12, function(x) {
+  cor(x,cdata[index(x),'SPY'])
+  }, by=1, by.column=TRUE)
+
+df <- data.frame(xts::last(rcorr,"36 months"))
+
+df <- df %>% mutate(Date=as.Date(rownames(df))) %>% gather(Product,Value,-Date)
+
+p <- ggplot(df %>% na.omit,aes(x=Date,y=Value,colour=Product)) +
+  geom_line(size=stroke_size) +
+  labs(x=NULL,y="Correlation of 12-Month Returns") +
+  ggtitle("Rolling 12-Month Correlation of Price Returns with SPY") +
+  scale_y_continuous(limits=c(-1,1)) +
+  geom_hline(yintercept = 0, color="black", linetype="dashed")
+
+direct.label(p)
 ```
 
 
