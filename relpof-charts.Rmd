@@ -57,12 +57,14 @@ macro_tickers <- c("SPY","EEM","ELD","GLD","GSG","UUP","VNQ","TLT","AGG")
 bull_tickers <- c("AGG","DVY","FLTB","GLD","GSG","SHV")
 bear_tickers <- c("SPY","GSG","GLD","FXF","FUTY","FLTB","TLT")
 basket_tickers <- c("VTI","VGK","EWJ","EEM","IEF","ICF","RWX","DBC","GLD","TLT")
+index_tickers <- c("^GSPC")
 
 all_symbols <- sort(unique(c(
                              macro_tickers,
 			                       bull_tickers,
                              bear_tickers,
-                             basket_tickers
+                             basket_tickers,
+			                       index_tickers
                              )))
 exchange_data <- new.env()
 missing_tickers <- c()
@@ -937,5 +939,30 @@ direct.label(p)
 ```
 
 
+<!-- # Futures Market -->
+
+<!-- ## S&P 500 Futures Term Structure -->
+
+<!-- ```{r esterm} -->
+<!-- ES1 <- get("ES1",envir=exchange_data) -->
+<!-- ES4 <- get("ES4",envir=exchange_data) -->
+<!-- SPX <- quantmod::Ad(get("GSPC",envir=exchange_data)) -->
+<!-- df.xts <- cbind(ES1,ES4,SPX) -->
+<!-- colnames(df.xts) <- c("ES1","ES4","SPX") -->
+
+<!-- df <- data.frame(na.locf(xts::last(df.xts,"24 months"))) -->
+<!-- df$Ratio <- df$ES4 / df$ES1 -->
+<!-- df <- df %>% mutate(Date=as.Date(rownames(df))) %>% gather(Product,Value,-Date) -->
+
+<!-- df$Panel <- "Price ($)" -->
+<!-- df$Panel[which(df$Product=="Ratio")] <- "Ratio (M4/M1)" -->
+
+<!-- p <- ggplot(df %>% na.omit,aes(x=Date,y=Value,colour=Product)) + -->
+<!--   geom_line(size=stroke_size) + -->
+<!--   labs(x=NULL,y="Futures and Index Price ($)") + -->
+<!--   ggtitle("S&P-500 Continuous Futures and Index Price") + -->
+<!--   facet_grid(Panel~.,scales="free_y") -->
+<!-- direct.label(p) -->
+<!-- ``` -->
 
        
