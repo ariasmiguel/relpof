@@ -145,7 +145,7 @@ available_symbols <- subset(all_symbols,all_symbols %nin% missing_tickers)
 closing_prices <- do.call(cbind,
                           lapply(available_symbols,
                                  function(x) {
-                                   Cl(get(x,envir=exchange_data))
+                                   Cl(get(gsub("^","",x,fixed=TRUE),envir=exchange_data))
                                  }))
 closing_prices <- na.locf(closing_prices)
 colnames(closing_prices) <- available_symbols
