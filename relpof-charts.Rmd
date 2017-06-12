@@ -86,6 +86,14 @@ if ( file.exists( exchange_file )) {
         missing_tickers <<- c(missing_tickers,symbol)
       }
     )
+    # substitute interpolated values
+    if ( exists(symbol,exchange_data) ) {
+      sd <- get(symbol,exchange_data)
+      if ( any(is.na(sd)) ) {
+        sd <- na.approx(sd)
+        assign(symbol, sd, envir=exchange_data)
+      }
+    }
   }
   
   # Quandl
