@@ -50,6 +50,21 @@ if (is.na(quandl_api) || ("NA" == quandl_api)) {
 }
 Quandl.api_key(quandl_api) # authenticate
 
+# use the adjusted values from quandl
+getAdjusted <- function(qd, na.fill=TRUE) {
+  mstring <- "Adj_"
+  rv <- qd
+  if ( any( grepl(mstring, colnames(qd))) ) {
+    rv <- qd[,which(grepl(mstring, colnames(qd)))]
+    if ( na.fill == TRUE ) {
+      if ( any( is.na(rv)) ) {
+        rv <- na.approx(rv)        
+      }
+    }
+    colnames(rv) <- gsub(mstring,"",colnames(rv))
+  }
+  rv
+}
 ```
 
 ```{r tickers}
@@ -72,28 +87,23 @@ if ( file.exists( exchange_file )) {
   load( exchange_file ) # loads exchange data environment
   missing_tickers <- get("missing_tickers",envir=exchange_data)
 } else {
-  # Yahoo
+  # Quandl
   for ( s in seq_along(all_symbols)) {
     symbol <- all_symbols[s]
     message(paste("Fetching",symbol))
-    tryCatch(
-      getSymbols(symbol,
-                 from=start_date,
-                 adjust=TRUE,
-                 warnings = FALSE,
-                 env = exchange_data),
+    tryCatch({
+      #getSymbols(symbol,
+      #           from=start_date,
+      #           adjust=TRUE,
+      #           warnings = FALSE,
+      #           env = exchange_data),
+      x <- Quandl(paste0("EOD/",symbol),type="xts",order="asc",start_date=start_date)
+      x <- getAdjusted(x)
+    },
       error = function(e) {
         missing_tickers <<- c(missing_tickers,symbol)
       }
     )
-    # substitute interpolated values
-    if ( exists(symbol,exchange_data) ) {
-      sd <- get(symbol,exchange_data)
-      if ( any(is.na(sd)) ) {
-        sd <- na.approx(sd)
-        assign(symbol, sd, envir=exchange_data)
-      }
-    }
   }
   
   # Quandl
@@ -187,7 +197,7 @@ require(tidyr)
 
 - Last data date: `r last_data_date`
 - Reference symbols: SPY, TLT
-- Data feed: Yahoo! Finance
+- NO LONGER USING DATA FEED: Yahoo! Finance
 - Data feed: Quandl CBOE, Merrill-Lynch
 
 
