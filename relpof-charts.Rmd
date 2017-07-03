@@ -72,14 +72,12 @@ macro_tickers <- c("SPY","EEM","ELD","GLD","GSG","UUP","VNQ","TLT","AGG")
 bull_tickers <- c("AGG","DVY","FLTB","GLD","GSG","SHV")
 bear_tickers <- c("SPY","GSG","GLD","FXF","FUTY","FLTB","TLT")
 basket_tickers <- c("VTI","VGK","EWJ","EEM","IEF","ICF","RWX","DBC","GLD","TLT")
-index_tickers <- c("^GSPC")
 
 all_symbols <- sort(unique(c(
                              macro_tickers,
 			                       bull_tickers,
                              bear_tickers,
-                             basket_tickers,
-			                       index_tickers
+                             basket_tickers
                              )))
 exchange_data <- new.env()
 missing_tickers <- c()
@@ -99,6 +97,7 @@ if ( file.exists( exchange_file )) {
       #           env = exchange_data),
       x <- Quandl(paste0("EOD/",symbol),type="xts",order="asc",start_date=start_date)
       x <- getAdjusted(x)
+      assign(symbol,x,envir = exchange_data)
     },
       error = function(e) {
         missing_tickers <<- c(missing_tickers,symbol)
@@ -158,12 +157,12 @@ save(exchange_data,file=exchange_file)
 ```
 
 ```{r prices}
-available_symbols <- subset(all_symbols,all_symbols %nin% missing_tickers)
+available_symbols <- subset(all_symbols ,all_symbols %nin% missing_tickers)
 
 closing_prices <- do.call(cbind,
                           lapply(available_symbols,
                                  function(x) {
-                                   Cl(get(gsub("^","",x,fixed=TRUE),envir=exchange_data))
+                                   Cl(get(x,envir=exchange_data))
                                  }))
 closing_prices <- na.locf(closing_prices)
 colnames(closing_prices) <- available_symbols
