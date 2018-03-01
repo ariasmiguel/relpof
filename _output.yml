@@ -7,3 +7,5 @@ beamer_presentation:
   fig_height: 5
   fig_caption: false
   highlight: tango
+  includes:
+    in_header: header_pageno.tex
