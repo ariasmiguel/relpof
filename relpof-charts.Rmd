@@ -72,6 +72,7 @@ macro_tickers <- c("SPY","EEM","ELD","GLD","GSG","UUP","VNQ","TLT","AGG")
 bull_tickers <- c("AGG","DVY","FLTB","GLD","GSG","SHV")
 bear_tickers <- c("SPY","GSG","GLD","FXF","FUTY","FLTB","TLT")
 basket_tickers <- c("VTI","VGK","EWJ","EEM","IEF","ICF","RWX","DBC","GLD","TLT")
+fred_tickers <- c("RRSFS","INDPRO")
 
 all_symbols <- sort(unique(c(
                              macro_tickers,
@@ -85,7 +86,23 @@ if ( file.exists( exchange_file )) {
   load( exchange_file ) # loads exchange data environment
   missing_tickers <- get("missing_tickers",envir=exchange_data)
 } else {
-  # Quandl
+  # Quandl FRED
+  for ( s in seq_along(fred_tickers)) {
+    symbol <- fred_tickers[s]
+    message(paste("Fetching",symbol))
+    tryCatch({
+      x <- Quandl(paste0("FRED/",symbol),type="xts",order="asc",start_date=start_date)
+      assign(symbol,x,envir = exchange_data)
+    },
+      error = function(e) {
+        missing_tickers <<- c(missing_tickers,symbol)
+      }
+    )
+    
+  }
+  
+  
+  # Quandl EOD
   for ( s in seq_along(all_symbols)) {
     symbol <- all_symbols[s]
     message(paste("Fetching",symbol))
@@ -105,7 +122,7 @@ if ( file.exists( exchange_file )) {
     )
   }
   
-  # Quandl
+  # Quandl miscellaneous
   message("Fetching Quandl data")
   CCHA <- Quandl("CBOE/COMBINED_PC_ARCHIVE",type="xts",order="asc",start_date="1980-01-01")
   TPCA <- Quandl("CBOE/TOTAL_PC_ARCHIVE",type="xts",order="asc",start_date="1980-01-01")
@@ -190,17 +207,7 @@ require(dplyr)
 require(tidyr)
 ```
 
-# Introduction
-
-## Setup
-
-- Last data date: `r last_data_date`
-- Reference symbols: SPY, TLT
-- NO LONGER USING DATA FEED: Yahoo! Finance
-- Data feed: Quandl CBOE, Merrill-Lynch
-
-
-# Biggest Movers
+# Movers and Models
 
 ## Biggest Moves 30-Days
 
@@ -244,73 +251,7 @@ p <- ggplot(df,aes(x=Date,y=(Return-1),colour=Product)) +
 direct.label(p)
 ```
 
-
-# Macro Performance
-
-## Macro Funds
-
-```{r last-60-days-macro}
-df <- data.frame(cumprod(1 + daily_returns_60[,macro_tickers]))
-df <- df %>% mutate(Date=as.Date(rownames(df))) %>% gather(Product,Return,-Date)
-p <- ggplot(df %>% na.omit,aes(x=Date,y=(Return-1),colour=Product)) +
-  geom_line(size=stroke_size) +
-  labs(x=NULL) +
-  scale_y_continuous(labels=percent_format()) +
-  ggtitle("Macro Last 60 Days Cumulative Return")
-direct.label(p)
-```
-
 ----
-
-```{r last-60-days-macro-relative}
-df <- data.frame( relative_spy_60[,macro_tickers] )
-df <- df %>% mutate(Date=as.Date(rownames(df))) %>% gather(Product,Return,-Date)
-p <- ggplot(df %>% na.omit,aes(x=Date,y=Return-1,colour=Product)) +
-  geom_line(size=stroke_size) +
-  labs(x=NULL,y="Relative Return (SPY)") +
-  scale_y_continuous(labels=percent_format()) +
-  ggtitle("Macro Last 60 Days Cumulative Relative Return")
-direct.label(p)
-```
-
-----
-
-```{r last-60-days-macro-relative-bar}
-sr <- relative_spy_60[,macro_tickers] - 1
-df <- data.frame(tail(sr,1))
-df <- df %>% mutate(Date=as.Date(rownames(df))) %>% select(-which(colnames(df)=='SPY')) %>% gather(Product,Return,-Date)
-p <- ggplot(df,aes(x=reorder(Product,desc(Return)),Return,fill=Product)) +
-  geom_bar(stat="identity",position="dodge") +
-  theme(legend.position="off") +
-  scale_y_continuous(labels=percent_format()) +
-  labs(x=NULL,y="Relative Return (%, SPY)") +
-  ggtitle("Macro Last 60 Days Cumulative Relative Return")
-p
-```
-
-----
-
-```{r,macro-relative-multibar}
-sr30 <- relative_spy_30[,macro_tickers] - 1
-sr60 <- relative_spy_60[,macro_tickers] - 1
-df30 <- data.frame(tail(sr30,1))
-df60 <- data.frame(tail(sr60,1))
-df30$Period <- "30 Days"
-df60$Period <- "60 Days"
-df30 <- df30 %>% select(-which(colnames(df30)=='SPY')) %>% gather(Product,Return,1:(ncol(df30)-2))
-df60 <- df60 %>% select(-which(colnames(df60)=='SPY')) %>% gather(Product,Return,1:(ncol(df60)-2))
-df <- rbind(df30,df60)
-p <- ggplot(df,aes(x=reorder(Product,desc(Return)),Return,fill=Product)) +
-  geom_bar(stat="identity",position="dodge") +
-  theme(legend.position="off") +
-  facet_grid(.~Period) +
-  scale_y_continuous(labels=percent_format()) +
-  ggtitle("Macro Cumulative Relative Return by Period") +
-  labs(x=NULL,y="Relative Return (%, SPY)")
-p
-```
-
-# Model Performance
 
 ## Bull Model Performance
 
@@ -702,7 +643,7 @@ direct.label(p)
 
 ```
 
-# Options Market
+# Options 
 
 ## Put/Call Ratios
 
@@ -858,7 +799,7 @@ direct.label(p)
 
 ```
 
-# Corporate Debt
+# Corporate 
 
 ## Merrill-Lynch Bond Indices
 
@@ -954,6 +895,131 @@ p <- ggplot(df %>% na.omit,aes(x=Date,y=Value,colour=Product)) +
 
 direct.label(p)
 ```
+
+# Macro 
+
+## Macro Funds
+
+```{r last-60-days-macro}
+df <- data.frame(cumprod(1 + daily_returns_60[,macro_tickers]))
+df <- df %>% mutate(Date=as.Date(rownames(df))) %>% gather(Product,Return,-Date)
+p <- ggplot(df %>% na.omit,aes(x=Date,y=(Return-1),colour=Product)) +
+  geom_line(size=stroke_size) +
+  labs(x=NULL) +
+  scale_y_continuous(labels=percent_format()) +
+  ggtitle("Macro Last 60 Days Cumulative Return")
+direct.label(p)
+```
+
+----
+
+```{r last-60-days-macro-relative}
+df <- data.frame( relative_spy_60[,macro_tickers] )
+df <- df %>% mutate(Date=as.Date(rownames(df))) %>% gather(Product,Return,-Date)
+p <- ggplot(df %>% na.omit,aes(x=Date,y=Return-1,colour=Product)) +
+  geom_line(size=stroke_size) +
+  labs(x=NULL,y="Relative Return (SPY)") +
+  scale_y_continuous(labels=percent_format()) +
+  ggtitle("Macro Last 60 Days Cumulative Relative Return")
+direct.label(p)
+```
+
+----
+
+```{r last-60-days-macro-relative-bar}
+sr <- relative_spy_60[,macro_tickers] - 1
+df <- data.frame(tail(sr,1))
+df <- df %>% mutate(Date=as.Date(rownames(df))) %>% select(-which(colnames(df)=='SPY')) %>% gather(Product,Return,-Date)
+p <- ggplot(df,aes(x=reorder(Product,desc(Return)),Return,fill=Product)) +
+  geom_bar(stat="identity",position="dodge") +
+  theme(legend.position="off") +
+  scale_y_continuous(labels=percent_format()) +
+  labs(x=NULL,y="Relative Return (%, SPY)") +
+  ggtitle("Macro Last 60 Days Cumulative Relative Return")
+p
+```
+
+----
+
+```{r,macro-relative-multibar}
+sr30 <- relative_spy_30[,macro_tickers] - 1
+sr60 <- relative_spy_60[,macro_tickers] - 1
+df30 <- data.frame(tail(sr30,1))
+df60 <- data.frame(tail(sr60,1))
+df30$Period <- "30 Days"
+df60$Period <- "60 Days"
+df30 <- df30 %>% select(-which(colnames(df30)=='SPY')) %>% gather(Product,Return,1:(ncol(df30)-2))
+df60 <- df60 %>% select(-which(colnames(df60)=='SPY')) %>% gather(Product,Return,1:(ncol(df60)-2))
+df <- rbind(df30,df60)
+p <- ggplot(df,aes(x=reorder(Product,desc(Return)),Return,fill=Product)) +
+  geom_bar(stat="identity",position="dodge") +
+  theme(legend.position="off") +
+  facet_grid(.~Period) +
+  scale_y_continuous(labels=percent_format()) +
+  ggtitle("Macro Cumulative Relative Return by Period") +
+  labs(x=NULL,y="Relative Return (%, SPY)")
+p
+```
+
+## Real Retail Sales
+
+```{r retailsales}
+RRSFS <- get("RRSFS",envir=exchange_data)
+colnames(RRSFS) <- "RRSFS"
+RRSFS$PCYOY <- Delt(RRSFS$RRSFS,k=12) * 100
+
+df <- data.frame( xts::last(RRSFS,"5 years") )
+
+df <- df %>% 
+  mutate(Date=zoo::as.Date(as.yearmon(rownames(df)))) %>%
+  select(-RRSFS) %>%
+  gather(Product,Value,-Date)
+p <- ggplot(df %>% na.omit,aes(x=Date,y=Value,colour=Product)) +
+  geom_line(size=stroke_size) +
+  labs(x=NULL,
+       y="Percent Change from Year Ago",
+       subtitle="Values below zero usually indicate recessions") +
+  ggtitle("FRED US Advance Real Retail and Food Service Sales") +
+  geom_hline(yintercept = 0, color="darkgray" )
+direct.label(p)
+
+```
+
+----
+
+## Industrial Production
+
+
+```{r indpro}
+INDPRO <- get("INDPRO",envir=exchange_data)
+colnames(INDPRO) <- "INDPRO"
+INDPRO$PCYOY <- Delt(INDPRO$INDPRO,k=12) * 100
+
+df <- data.frame( xts::last(INDPRO,"5 years") )
+
+df <- df %>% 
+  mutate(Date=zoo::as.Date(as.yearmon(rownames(df)))) %>%
+  select(-INDPRO) %>%
+  gather(Product,Value,-Date)
+p <- ggplot(df %>% na.omit,aes(x=Date,y=Value,colour=Product)) +
+  geom_line(size=stroke_size) +
+  labs(x=NULL,
+       y="Percent Change from Year Ago",
+       subtitle="Values below zero usually indicate recessions") +
+  ggtitle("FRED US Industrial Production") +
+  geom_hline(yintercept = 0, color="darkgray" )
+direct.label(p)
+
+```
+
+
+# Reference
+
+## Setup
+
+- Last data date: `r last_data_date`
+- Reference symbols: SPY, TLT
+- Data feed: Quandl EOD,FRED, CBOE, Merrill-Lynch
 
 
 <!-- # Futures Market -->
